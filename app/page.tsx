@@ -7,9 +7,9 @@ export default function Home() {
   const [currentWeightsInput, setCurrentWeightsInput] = useState('2.5, 1.25, 1.25');
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
+  const [isIncreaseMode, setIsIncreaseMode] = useState(true); // New state for the slider
 
-  // The core logic to find the smallest weight increase.
-  const findSmallestIncrease = (currentPlatesStr: string, availablePlatesStr: string) => {
+  const findSmallestChange = (currentPlatesStr: string, availablePlatesStr: string, mode: 'increase' | 'decrease') => {
     // Helper function to parse a comma-separated string of weights into a number array.
     const parseWeights = (weightsStr: string) => {
       return weightsStr
@@ -23,14 +23,15 @@ export default function Home() {
 
     if (currentPlates.length === 0 || availablePlates.length === 0) {
       setError("Please enter valid weights for both current and available plates.");
+      setResult(null);
       return;
     }
 
     // Helper function to generate all possible sums from a given list of plates.
     const generateAllSums = (plates: number[]): { sum: number; plates: number[] }[] => {
       const results = [{ sum: 0, plates: [] as number[] }];
-      for (let i = 0; i < plates.length; i++) {
-        const plate = plates[i];
+      const uniquePlates = Array.from(new Set(plates));
+      for (const plate of uniquePlates) {
         const newResults = [];
         for (const result of results) {
           const newPlates = [...result.plates, plate];
@@ -41,29 +42,34 @@ export default function Home() {
       return results;
     };
 
-    // Get all possible sums for plates to add and remove.
     const possibleAdditions = generateAllSums(availablePlates);
     const possibleRemovals = generateAllSums(currentPlates);
 
-    let smallestIncrease = Infinity;
+    let bestChange = Infinity;
     let bestAddition: number[] = [];
     let bestRemoval: number[] = [];
 
-    // Find the smallest positive increase by comparing all possible additions and removals.
+    // The logic to find the smallest change (positive for increase, negative for decrease).
     for (const add of possibleAdditions) {
       for (const remove of possibleRemovals) {
         const netChange = add.sum - remove.sum;
-        if (netChange > 0 && netChange < smallestIncrease) {
-          smallestIncrease = netChange;
+
+        if (mode === 'increase' && netChange > 0 && netChange < bestChange) {
+          bestChange = netChange;
+          bestAddition = add.plates;
+          bestRemoval = remove.plates;
+        } else if (mode === 'decrease' && netChange < 0 && Math.abs(netChange) < Math.abs(bestChange)) {
+          bestChange = netChange;
           bestAddition = add.plates;
           bestRemoval = remove.plates;
         }
       }
     }
 
-    // Check if a positive increase was found.
-    if (smallestIncrease === Infinity) {
-      setError("No positive weight increase is possible with the given plates.");
+    // Check if a valid change was found.
+    const isChangeFound = mode === 'increase' ? bestChange !== Infinity : bestChange !== Infinity;
+    if (!isChangeFound) {
+      setError(`No valid weight ${mode} is possible with the given plates.`);
       setResult(null);
       return;
     }
@@ -73,20 +79,35 @@ export default function Home() {
     bestRemoval.sort((a, b) => a - b);
 
     setResult({
-      increase: smallestIncrease,
+      change: bestChange,
       addPlates: bestAddition,
       removePlates: bestRemoval,
+      mode: mode,
     });
     setError('');
   };
 
-  // The 'useMemo' hook memoizes the result to prevent recalculation on every render.
   const memoizedResult = useMemo(() => result, [result]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 font-sans antialiased">
       <div className="w-full max-w-2xl bg-white p-8 rounded-xl shadow-lg border border-gray-200">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Dumbbell Weight Optimizer</h1>
+        
+        {/* Toggle Switch */}
+        <div className="flex justify-center items-center space-x-4 mb-6">
+          <span className="text-gray-600">Decrease Weight</span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={isIncreaseMode}
+              onChange={() => setIsIncreaseMode(!isIncreaseMode)}
+            />
+            <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
+          <span className="text-gray-600">Increase Weight</span>
+        </div>
 
         <div className="space-y-6">
           {/* Input for available weights */}
@@ -119,10 +140,10 @@ export default function Home() {
 
           {/* Calculation button */}
           <button
-            onClick={() => findSmallestIncrease(currentWeightsInput, availableWeightsInput)}
+            onClick={() => findSmallestChange(currentWeightsInput, availableWeightsInput, isIncreaseMode ? 'increase' : 'decrease')}
             className="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-md shadow-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
-            Find Smallest Increase
+            Find Smallest Change
           </button>
         </div>
 
@@ -137,9 +158,9 @@ export default function Home() {
           {memoizedResult && (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-gray-800">Results</h2>
-              <div className="bg-green-100 p-4 rounded-md shadow-inner border border-green-200">
-                <p className="font-semibold text-green-700 text-lg">
-                  Smallest Total Weight Increase Per Side: <span className="text-green-900">{memoizedResult.increase.toFixed(2)} kg</span>
+              <div className={`p-4 rounded-md shadow-inner border ${memoizedResult.mode === 'increase' ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'}`}>
+                <p className={`font-semibold text-lg ${memoizedResult.mode === 'increase' ? 'text-green-700' : 'text-red-700'}`}>
+                  Smallest Total Weight {memoizedResult.mode === 'increase' ? 'Increase' : 'Decrease'} Per Side: <span className={`${memoizedResult.mode === 'increase' ? 'text-green-900' : 'text-red-900'}`}>{Math.abs(memoizedResult.change).toFixed(2)} kg</span>
                 </p>
               </div>
 
@@ -164,7 +185,6 @@ export default function Home() {
                     </span>
                   </div>
                 )}
-                
               </div>
             </div>
           )}
