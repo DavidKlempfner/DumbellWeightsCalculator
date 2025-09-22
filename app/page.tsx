@@ -30,15 +30,29 @@ export default function Home() {
     // Helper function to generate all possible sums from a given list of plates.
     const generateAllSums = (plates: number[]): { sum: number; plates: number[] }[] => {
       const results = [{ sum: 0, plates: [] as number[] }];
-      const uniquePlates = Array.from(new Set(plates));
-      for (const plate of uniquePlates) {
-        const newResults = [];
-        for (const result of results) {
-          const newPlates = [...result.plates, plate];
-          newResults.push({ sum: result.sum + plate, plates: newPlates });
+      // Count the frequency of each plate
+      const plateCounts = plates.reduce((acc, plate) => {
+        acc[plate] = (acc[plate] || 0) + 1;
+        return acc;
+      }, {} as Record<number, number>);
+
+      // For each unique plate weight
+      Object.entries(plateCounts).forEach(([plate, count]) => {
+        const plateWeight = parseFloat(plate);
+        // For each possible number of this plate (1 to count)
+        for (let i = 1; i <= count; i++) {
+          const currentResults = [...results];
+          // For each existing result
+          for (const result of currentResults) {
+            // Add i plates of this weight
+            const newPlates = [...result.plates, ...Array(i).fill(plateWeight)];
+            results.push({ 
+              sum: result.sum + (plateWeight * i), 
+              plates: newPlates 
+            });
+          }
         }
-        results.push(...newResults);
-      }
+      });
       return results;
     };
 
